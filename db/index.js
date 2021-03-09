@@ -1,8 +1,8 @@
-import mysql from 'mysql2/promise';
+import mysql from 'mysql2';
 import dotenv from 'dotenv';
 
 dotenv.config();
-const sqlPromise = mysql.createPool({
+const pool = mysql.createPool({
   host: process.env.DB_HOST,
   user: process.env.DB_USER,
   password: process.env.DB_PASS,
@@ -10,8 +10,10 @@ const sqlPromise = mysql.createPool({
   connectionLimit: 10,
 });
 
+const promisePool = pool.promise();
+
 (async () => {
-  const sql = await sqlPromise;
+  const sql = await promisePool;
   // handle unexpected errors by just logging them
   sql.on('error', (err) => {
     console.error(err);
@@ -19,4 +21,4 @@ const sqlPromise = mysql.createPool({
   });
 })();
 
-export default sqlPromise;
+export default promisePool;
