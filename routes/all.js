@@ -17,12 +17,11 @@ const sendEmail = (newProducts, emailId) => {
     },
   });
 
-  transporter.sendMail(
-    {
-      from: process.env.AUTH_EMAIL,
-      to: process.env.TO_EMAIL,
-      subject: `New GPUs floating around... | REF: ${emailId}`,
-      html: `<h2>There are new GPUs, go check them out</h2>
+  return transporter.sendMail({
+    from: process.env.AUTH_EMAIL,
+    to: process.env.TO_EMAIL,
+    subject: `New GPUs floating around... | REF: ${emailId}`,
+    html: `<h2>There are new GPUs, go check them out</h2>
             <h4>New GPUs:</h4>
             <ul>
                 ${newProducts
@@ -33,15 +32,7 @@ const sendEmail = (newProducts, emailId) => {
                   .join('')}
             </ul>
         `,
-    },
-    (err, info) => {
-      if (err) {
-        console.error(err);
-      } else {
-        console.log('Email sent: ' + info.response);
-      }
-    }
-  );
+  });
 };
 
 // this route returns all available in stock gpus as a json but will only send an email for the ones that are NEW
@@ -52,14 +43,15 @@ router.get('/', async (req, res) => {
     const shops = JSON.parse(
       await fs.readFile(new URL('../shops.json', import.meta.url))
     );
+    const allProductsResponses = await Promise.all(
+      shops.map((shop) => fetch(serverUrl + shop))
+    );
     const allProducts = await Promise.all(
-      shops.map(async (shop) => {
-        const response = await fetch(serverUrl + shop);
+      allProductsResponses.map((response) => {
         if (response.ok) {
-          return await response.json();
-        } else {
-          console.warn(`Failed to load ${shop}`);
+          return response.json()
         }
+        console.warn(`Failed to load ${response.url}`)
       })
     );
     const availableProducts = allProducts
@@ -81,11 +73,14 @@ router.get('/', async (req, res) => {
 
     if (newProducts.length) {
       await sql.query('TRUNCATE TABLE products');
-      await sql.query(
-        'INSERT INTO products(shop, product, price, available, product_url) VALUES ?',
-        [newProducts.map((el) => Object.values(el))]
-      );
-      sendEmail(newProducts, nanoid(10));
+      const [, emailInfo] = await Promise.all([
+        sql.query(
+          'INSERT INTO products(shop, product, price, available, product_url) VALUES ?',
+          [newProducts.map((el) => Object.values(el))]
+        ),
+        sendEmail(newProducts, nanoid(10)),
+      ]);
+      console.log('Email sent: ' + emailInfo.response);
     }
 
     res.json(availableProducts);
