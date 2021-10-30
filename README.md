@@ -1,0 +1,2 @@
+- `npm i && npm run initdb`
+- `npm run dev` || `npm start`
